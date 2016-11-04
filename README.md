@@ -1,8 +1,8 @@
-#INTRODUCTION
+# Introduction
 
 This is an introductory presentation about Elasticsearch, aimed at people who know little to nothing about it.
 
-#SETUP
+# Setup
 
 Opened with the powerpoint, then ran though kibana.txt in kibana.
 
@@ -10,7 +10,7 @@ Basic Elasticsearch and kibana were installed on the local machine
 * Elasticsearch on localhost:9200
 * Kibana at localhost:5601/app/sense
 
-#DATA SOURCE
+# Data Source
 
 The data used for the presentation was setup as follows.
 
@@ -23,7 +23,7 @@ Json reformatted and bulk posted to elasticsearch, using [jq](https://stedolan.g
 cat AirplaneCrashes.json | jq -c '.[] | {"index": {"_index": "airplanecrash", "_type": "type1"}}, .' | curl -XPOST localhost:9200/_bulk --data-binary @-
 ```
 
-#REFERENCES
+# References
 
 [On using jq with Elasticsearch](http://kevinmarsh.com/2014/10/23/using-jq-to-import-json-into-elasticsearch.html)
 
