@@ -1,0 +1,336 @@
+
+# To populate the index:
+# markc@PU-LAP-503 /cygdrive/c/Workspace/dataSources
+# $ cat AirplaneCrashes.json | jq -c '.[] | {"index": {"_index": "airplanecrash", "_type": "type1"}}, .' | curl -XPOST localhost:9200/_bulk --data-binary @-
+
+
+DELETE airplanecrash
+{}
+
+#==================================================================
+#
+# Document
+# Documents of the same type are stored in an index
+#
+#==================================================================
+
+# First powered, controlled flight, 1903, and then...
+GET airplanecrash/type1/AVgFdWD_ZjxoCsA192yh
+
+# To figure out the id of the above document example:
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "_all": "1908"
+    }
+  }
+}
+
+
+#==================================================================
+#
+# Index mapping
+# How to map a single document type for search purposes.
+#
+#==================================================================
+
+
+# The mapping
+PUT /airplanecrash/
+{
+  "mappings": {
+  "type1": {
+    "properties": {
+      "CrashDate": {
+        "type": "date",
+        "format": "MM/dd/yyyy"
+      },
+      "CrashTime": {
+        "type": "date",
+        "format": "HH:mm"
+      },
+      "Operator":{
+        "type": "string",
+        "index": "not_analyzed",
+        "fields": {
+          "keyword": {
+            "type": "string",
+            "analyzer": "keyword"
+          },
+          "standard": {
+            "type": "string",
+            "analyzer": "standard"
+          }
+        }
+      }
+    }
+  }
+  }
+}
+
+
+# Search for everything in the airplanecrash index
+# (type1, ignore it, couldn't think of a better name)
+GET airplanecrash/type1/_search
+{}
+
+# Find documents that mention "helicopter" in them.
+GET airplanecrash/type1/_search?q=helicopter
+
+# Which is the same as this:
+# _all field is an auto-created abomination by es, to help you!
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "_all": "helicopter"
+    }
+  }
+}
+
+# Find documents that mention "helicoper" and/or "australia" in them.
+# (check out from 100)
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "_all": "helicopter australia"
+    }
+  },
+  "size": 10,
+  "from": 0
+}
+
+# Search just one field:
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "Operator.standard": "services"
+    }
+  }
+}
+
+# Exact field search (returns nothing)
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "Operator.keyword": "services"
+    }
+  }
+}
+
+# Exact field search (returns something)
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "Operator.keyword": "Central Mountain Air Services"
+    }
+  }
+}
+
+
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match":{
+      "Location" : "australia"
+    }
+  }
+}
+
+
+# Ranged dates search
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "range" : {
+        "CrashDate" : {
+            "gte" : "1/1/2005",
+            "lte" : "12/31/2005"
+        }
+    }    
+  }
+}
+
+# Putting it together 
+# (with 'must', like AND &&)
+# Checkout what changing 'must' to 'should' does.
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        { "match": { "Location" : "australia" }},
+        {"range" : {
+            "CrashDate" : {
+                "gte" : "1/1/2000",
+                "lte" : "1/1/2016"
+            }}
+        }    
+      ]
+    }
+  },
+  "size": 10,
+  "from": 0
+}
+
+#==================================================================
+#
+# SUGGEST
+# Fuzzy searches, spelling correction suggestions
+# (uses distance algorithms)
+#
+#==================================================================
+
+# Oops, I mis-spelt the U.S. Air Force.
+# "Military - U.S. Air Farc",
+# Scroll to bottom to see suggestors.
+GET airplanecrash/type1/_search
+{
+  "suggest": {
+    "location_suggestions" : {
+      "text" : "Military - U.S. Air Farce",
+      "term" : {
+        "field": "Operator.keyword"
+      }
+    }
+  },
+  "size": 0,
+  "from": 0
+
+}
+
+#==================================================================
+#
+# AGGREGATES
+#
+#==================================================================
+
+# Return nothing (size 0), 
+# but aggregate Operator field (as keyword)
+GET airplanecrash/type1/_search
+{
+    "size" : 0,
+    "aggs" : { 
+        "Operators" : { 
+            "terms" : { 
+              "field" : "Operator.keyword"
+            }
+        }
+    }
+}
+
+# Operator field in standard mode isn't much help!
+GET airplanecrash/type1/_search
+{
+    "size" : 0,
+    "aggs" : { 
+        "Operators" : { 
+            "terms" : { 
+              "field" : "Operator.standard"
+            }
+        }
+    }
+}
+
+# An aggregated field, across ranges.
+GET airplanecrash/type1/_search
+{
+   "size" : 0,
+   "aggs": {
+      "ByYear": {
+         "date_histogram": {
+            "field": "CrashDate",
+            "interval": "year", 
+            "format": "yyyy" 
+         }
+      }
+   }
+}
+
+# Total aboard and total fatalaties per year.
+# (moral of the story, plane travel is very safe, but being in a crash is probably fatal -
+# although 1999 and 2008 weren't too bad for your chances of survival)
+GET airplanecrash/type1/_search
+{
+   "size" : 0,
+   "aggs": {
+      "ByYear": {
+         "date_histogram": {
+            "field": "CrashDate",
+            "interval": "year", 
+            "format": "yyyy" 
+         },
+         
+      "aggs": {
+        "total_aboard":{
+          "sum" :{"field":"Aboard"}
+        },
+        "total_fatalities": {
+          "sum" :{"field":"Fatalities"}
+        }
+      }
+      }
+   }  
+}
+
+
+#==================================================================
+#
+# PERCOLATOR
+#
+#==================================================================
+
+# Remember this query?
+GET airplanecrash/type1/_search
+{
+  "query": {
+    "match": {
+      "Operator.keyword": "Aeroflot"
+    }
+  }
+}
+
+PUT airplanecrash/.percolator/queryA
+{
+  "query": {
+    "match": {
+      "Operator.keyword": "Aeroflot"
+    }
+  }
+}
+
+PUT airplanecrash/.percolator/queryB
+{
+  "query": {
+    "match": {
+      "_all": "australia"
+    }
+  }
+}
+
+# Percolate: Which queries (out of queryA and queryB)
+# would match this document?
+GET airplanecrash/type1/_percolate
+{
+  "doc": {
+          "CrashDate": "07/08/2016",
+          "CrashTime": "12:30",
+          "Location": "Footscray, Australia",
+          "Operator": "Aeroflot",
+          "FlightNum": "",
+          "Route": "",
+          "Type": "My friends drone",
+          "Registration": "",
+          "cnIn": "",
+          "Aboard": 0,
+          "Fatalities": 1,
+          "Ground": 0,
+          "Summary": "Let child control drone which flew off into the distance, never to be seen again. Status of drone, MIA. Status of child, grounded"
+        }
+}
+
